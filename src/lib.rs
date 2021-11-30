@@ -302,8 +302,12 @@ impl ExpectFile {
         fs::write(self.abs_path(), contents).unwrap()
     }
     fn abs_path(&self) -> PathBuf {
-        let dir = Path::new(self.position).parent().unwrap();
-        WORKSPACE_ROOT.join(dir).join(&self.path)
+        if self.path.is_absolute() {
+            self.path.to_owned()
+        } else {
+            let dir = Path::new(self.position).parent().unwrap();
+            to_abs_ws_path(&dir.join(&self.path))
+        }
     }
 }
 
@@ -381,7 +385,7 @@ struct FileRuntime {
 
 impl FileRuntime {
     fn new(expect: &Expect) -> FileRuntime {
-        let path = WORKSPACE_ROOT.join(expect.position.file);
+        let path = to_abs_ws_path(Path::new(expect.position.file));
         let original_text = fs::read_to_string(&path).unwrap();
         let patchwork = Patchwork::new(original_text.clone());
         FileRuntime { path, original_text, patchwork }
@@ -474,16 +478,38 @@ fn format_patch(desired_indent: Option<usize>, patch: &str) -> String {
     buf
 }
 
-static WORKSPACE_ROOT: Lazy<PathBuf> = Lazy::new(|| {
-    let my_manifest = env::var("CARGO_MANIFEST_DIR").unwrap();
-    // Heuristic, see https://github.com/rust-lang/cargo/issues/3946
-    Path::new(&my_manifest)
-        .ancestors()
-        .filter(|it| it.join("Cargo.toml").exists())
-        .last()
-        .unwrap()
-        .to_path_buf()
-});
+fn to_abs_ws_path(path: &Path) -> PathBuf {
+    static WORKSPACE_ROOT: Lazy<Result<PathBuf, env::VarError>> = Lazy::new(|| {
+        let my_manifest = env::var("CARGO_MANIFEST_DIR")?;
+
+        // Heuristic, see https://github.com/rust-lang/cargo/issues/3946
+        let workspace_root = Path::new(&my_manifest)
+            .ancestors()
+            .filter(|it| it.join("Cargo.toml").exists())
+            .last()
+            .unwrap()
+            .to_path_buf();
+
+        Ok(workspace_root)
+    });
+
+    if path.is_absolute() {
+        path.to_owned()
+    } else {
+        let workspace_root = match WORKSPACE_ROOT.as_deref() {
+            Ok(root) => root,
+            Err(_) => {
+                eprintln!(
+                    "No CARGO_MANIFEST_DIR env var. Consider using absolute path. Path: {}",
+                    path.display()
+                );
+                panic!("No CARGO_MANIFEST_DIR env var.")
+            }
+        };
+
+        workspace_root.join(path).canonicalize().unwrap()
+    }
+}
 
 fn trim_indent(mut text: &str) -> String {
     if text.starts_with('\n') {
