@@ -178,6 +178,7 @@ macro_rules! expect {
         },
         data: $data,
         indent: true,
+        update: true,
     }};
     [[]] => { $crate::expect![[""]] };
 }
@@ -205,6 +206,8 @@ pub struct Expect {
     pub data: &'static str,
     #[doc(hidden)]
     pub indent: bool,
+    #[doc(hidden)]
+    pub update: bool,
 }
 
 /// Self-updating file.
@@ -250,6 +253,11 @@ impl Expect {
     /// If `true` (default), in-place update will indent the string literal.
     pub fn indent(&mut self, yes: bool) {
         self.indent = yes;
+    }
+
+    /// If `true` (default), in-place update will be enabled for this `Expect`.
+    pub fn update(&mut self, yes: bool) {
+        self.update = yes;
     }
 
     fn trimmed(&self) -> String {
@@ -321,7 +329,7 @@ static RT: Lazy<Mutex<Runtime>> = Lazy::new(Default::default);
 impl Runtime {
     fn fail_expect(expect: &Expect, expected: &str, actual: &str) {
         let mut rt = RT.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        if update_expect() {
+        if expect.update && update_expect() {
             println!("\x1b[1m\x1b[92mupdating\x1b[0m: {}", expect.position);
             rt.per_file
                 .entry(expect.position.file)
