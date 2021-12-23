@@ -288,6 +288,12 @@ impl Expect {
 fn locate_end(expect_invocation_to_eof: &str) -> Option<usize> {
     static TRAILER: Lazy<Regex> = Lazy::new(|| Regex::new(r##""#*(\s*]])"##).unwrap());
 
+    // First, check for `expect![[]]` (no literal).
+    let mut chars = expect_invocation_to_eof.chars().skip_while(|c| c.is_whitespace());
+    if (']', ']') == (chars.next()?, chars.next()?) {
+        return Some(0);
+    }
+
     let trailer = TRAILER.captures(expect_invocation_to_eof)?;
     let literal_end = trailer.get(0).unwrap().end() - trailer[1].len();
     Some(literal_end)
@@ -693,5 +699,8 @@ line1
             // [["\"]]"]],
             // [[r#""]]"#]],
         );
+
+        // Check `expect![[  ]]` as well.
+        assert_eq!(locate_end(" ]]"), Some(0));
     }
 }
