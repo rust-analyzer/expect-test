@@ -145,6 +145,7 @@ use std::{
 };
 
 use once_cell::sync::Lazy;
+use regex::Regex;
 
 const HELP: &str = "
 You can update all `expect![[]]` tests by running:
@@ -274,11 +275,22 @@ impl Expect {
             line_start += line.len();
         }
         let (literal_start, line_indent) = target_line.unwrap();
-        let literal_length =
-            file[literal_start..].find("]]").expect("Couldn't find matching `]]` for `expect![[`.");
-        let literal_range = literal_start..literal_start + literal_length;
+
+        let literal_end = locate_end(&file[literal_start..])
+            .expect("Couldn't find matching `]]` for `expect![[`.");
+
+        let literal_range = literal_start..literal_start + literal_end;
         Location { line_indent, literal_range }
     }
+}
+
+/// Returns the index of the end of the literal passed to `expect` in the input string.
+fn locate_end(expect_invocation_to_eof: &str) -> Option<usize> {
+    static TRAILER: Lazy<Regex> = Lazy::new(|| Regex::new(r##""#*(\s*]])"##).unwrap());
+
+    let trailer = TRAILER.captures(expect_invocation_to_eof)?;
+    let literal_end = trailer.get(0).unwrap().end() - trailer[1].len();
+    Some(literal_end)
 }
 
 impl ExpectFile {
@@ -659,6 +671,27 @@ line1
 line1
   line2
 "#]],
+        );
+    }
+
+    #[test]
+    fn test_locate() {
+        macro_rules! check_locate {
+            ($( [[$s:literal]] ),* $(,)?) => {$({
+                let lit = stringify!($s);
+                let with_trailer = format!("{} \t]]\n", lit);
+                assert_eq!(locate_end(&with_trailer), Some(lit.len()));
+            })*};
+        }
+
+        // Check that we handle string literals containing "]]" correctly.
+        check_locate!(
+            [[r#"{ arr: [[1, 2], [3, 4]], other: "foo" } "#]],
+
+            // We don't actually parse string literals, so these cases fail.
+            // [["]]"]],
+            // [["\"]]"]],
+            // [[r#""]]"#]],
         );
     }
 }
