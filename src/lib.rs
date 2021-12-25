@@ -40,8 +40,8 @@
 //!
 //! `expect!` returns an instance of `Expect` struct, which holds position
 //! information and a string literal. Use `Expect::assert_eq` for string
-//! comparison. Use `Expect::assert_debug_eq` for verbose debug comparison. Note that
-//! leading indentation is automatically removed.
+//! comparison. Use `Expect::assert_debug_eq` for verbose debug comparison. Note
+//! that leading indentation is automatically removed.
 //!
 //! ```
 //! use expect_test::expect;
@@ -65,8 +65,8 @@
 //! quickly update all the tests by running the test suite with `UPDATE_EXPECT`
 //! environmental variable set.
 //!
-//! If the expected data is too verbose to include inline, you can store it in an
-//! external file using the `expect_file!` macro:
+//! If the expected data is too verbose to include inline, you can store it in
+//! an external file using the `expect_file!` macro:
 //!
 //! ```no_run
 //! use expect_test::expect_file;
@@ -80,8 +80,8 @@
 //!
 //! # Suggested Workflows
 //!
-//! I like to use data-driven tests with `expect_test`. I usually define a single
-//! driver function `check` and then call it from individual tests:
+//! I like to use data-driven tests with `expect_test`. I usually define a
+//! single driver function `check` and then call it from individual tests:
 //!
 //! ```
 //! use expect_test::{expect, Expect};
@@ -130,11 +130,15 @@
 //!
 //! # Maintenance status
 //!
-//! The main customer of this library is rust-analyzer. The library is expected
-//! to be relatively stable, but, if the need arises, it could be significantly
-//! reworked to fit rust-analyzer better.
+//! The main customer of this library is rust-analyzer. The library is  stable,
+//! it is planned to not release any major versions past 1.0.
 //!
-//! MSRV: latest stable.
+//! ## Minimal Supported Rust Version
+//!
+//! This crate's minimum supported `rustc` version is `1.45.0`. MSRV is updated
+//! conservatively, supporting roughly 10 minor versions of `rustc`. MSRV bump
+//! is not considered semver breaking, but will require at least minor version
+//! bump.
 use std::{
     collections::HashMap,
     env, fmt, fs, mem,
@@ -144,7 +148,7 @@ use std::{
     sync::Mutex,
 };
 
-use once_cell::sync::Lazy;
+use once_cell::sync::{Lazy, OnceCell};
 
 const HELP: &str = "
 You can update all `expect![[]]` tests by running:
@@ -280,8 +284,8 @@ impl Expect {
 
         let literal_start = literal_start + (lit_to_eof.len() - lit_to_eof_trimmed.len());
 
-        let literal_len = locate_end(lit_to_eof_trimmed)
-            .expect("Couldn't find matching `]]` for `expect![[`.");
+        let literal_len =
+            locate_end(lit_to_eof_trimmed).expect("Couldn't find matching `]]` for `expect![[`.");
         let literal_range = literal_start..literal_start + literal_len;
         Location { line_indent, literal_range }
     }
@@ -331,7 +335,9 @@ fn find_str_lit_len(str_lit_to_eof: &str) -> Option<usize> {
         '"' => Normal,
         'r' => {
             let (n, c) = try_find_n_hashes(&mut s, usize::MAX)?;
-            if c != Some('"') { return None; }
+            if c != Some('"') {
+                return None;
+            }
             Raw(n)
         }
         _ => return None,
@@ -341,11 +347,16 @@ fn find_str_lit_len(str_lit_to_eof: &str) -> Option<usize> {
     loop {
         let c = oldc.take().or_else(|| s.next())?;
         match (c, kind) {
-            ('\\', Normal) => { let _escaped = s.next()?; }
-            ('"', Normal | Raw(0)) => break,
+            ('\\', Normal) => {
+                let _escaped = s.next()?;
+            }
+            ('"', Normal) => break,
+            ('"', Raw(0)) => break,
             ('"', Raw(n)) => {
                 let (seen, c) = try_find_n_hashes(&mut s, n)?;
-                if seen == n { break; }
+                if seen == n {
+                    break;
+                }
                 oldc = c;
             }
             _ => {}
@@ -553,36 +564,29 @@ fn format_patch(desired_indent: Option<usize>, patch: &str) -> String {
 }
 
 fn to_abs_ws_path(path: &Path) -> PathBuf {
-    static WORKSPACE_ROOT: Lazy<Result<PathBuf, env::VarError>> = Lazy::new(|| {
-        let my_manifest = env::var("CARGO_MANIFEST_DIR")?;
-
-        // Heuristic, see https://github.com/rust-lang/cargo/issues/3946
-        let workspace_root = Path::new(&my_manifest)
-            .ancestors()
-            .filter(|it| it.join("Cargo.toml").exists())
-            .last()
-            .unwrap()
-            .to_path_buf();
-
-        Ok(workspace_root)
-    });
-
     if path.is_absolute() {
-        path.to_owned()
-    } else {
-        let workspace_root = match WORKSPACE_ROOT.as_deref() {
-            Ok(root) => root,
-            Err(_) => {
-                eprintln!(
-                    "No CARGO_MANIFEST_DIR env var. Consider using absolute path. Path: {}",
-                    path.display()
-                );
-                panic!("No CARGO_MANIFEST_DIR env var.")
-            }
-        };
-
-        workspace_root.join(path).canonicalize().unwrap()
+        return path.to_owned();
     }
+
+    static WORKSPACE_ROOT: OnceCell<PathBuf> = OnceCell::new();
+    WORKSPACE_ROOT
+        .get_or_try_init(|| {
+            let my_manifest = env::var("CARGO_MANIFEST_DIR")?;
+
+            // Heuristic, see https://github.com/rust-lang/cargo/issues/3946
+            let workspace_root = Path::new(&my_manifest)
+                .ancestors()
+                .filter(|it| it.join("Cargo.toml").exists())
+                .last()
+                .unwrap()
+                .to_path_buf();
+
+            Ok(workspace_root)
+        })
+        .unwrap_or_else(|_: env::VarError| {
+            panic!("No CARGO_MANIFEST_DIR env var and the path is relative: {}", path.display())
+        })
+        .join(path)
 }
 
 fn trim_indent(mut text: &str) -> String {
