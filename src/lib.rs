@@ -238,6 +238,40 @@ impl fmt::Display for Position {
     }
 }
 
+#[derive(Clone, Copy)]
+enum StrLitKind {
+    Normal,
+    Raw(usize),
+}
+
+impl StrLitKind {
+    fn write_start(self, w: &mut impl std::fmt::Write) -> std::fmt::Result {
+        match self {
+            Self::Normal => write!(w, "\""),
+            Self::Raw(n) => {
+                write!(w, "r")?;
+                for _ in 0..n {
+                    write!(w, "#")?;
+                }
+                write!(w, "\"")
+            }
+        }
+    }
+
+    fn write_end(self, w: &mut impl std::fmt::Write) -> std::fmt::Result {
+        match self {
+            Self::Normal => write!(w, "\""),
+            Self::Raw(n) => {
+                write!(w, "\"")?;
+                for _ in 0..n {
+                    write!(w, "#")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 impl Expect {
     /// Checks if this expect is equal to `actual`.
     pub fn assert_eq(&self, actual: &str) {
@@ -324,11 +358,6 @@ fn locate_end(lit_to_eof: &str) -> Option<usize> {
 /// (either a quote or a hash).
 fn find_str_lit_len(str_lit_to_eof: &str) -> Option<usize> {
     use StrLitKind::*;
-    #[derive(Clone, Copy)]
-    enum StrLitKind {
-        Normal,
-        Raw(usize),
-    }
 
     fn try_find_n_hashes(
         s: &mut impl Iterator<Item = char>,
@@ -537,25 +566,31 @@ impl Patchwork {
     }
 }
 
-fn format_patch(desired_indent: Option<usize>, patch: &str) -> String {
-    let mut max_hashes = 0;
-    let mut cur_hashes = 0;
-    for byte in patch.bytes() {
-        if byte != b'#' {
-            cur_hashes = 0;
-            continue;
-        }
-        cur_hashes += 1;
-        max_hashes = max_hashes.max(cur_hashes);
+fn lit_kind_for_patch(patch: &str) -> StrLitKind {
+    let has_dquote = patch.chars().any(|c| c == '"');
+    if !has_dquote {
+        let has_bslash_or_newline = patch.chars().any(|c| matches!(c, '\\' | '\n'));
+        return if has_bslash_or_newline {
+            StrLitKind::Raw(1)
+        } else {
+            StrLitKind::Normal
+        };
     }
-    let hashes = &"#".repeat(max_hashes + 1);
+
+    // Find the maximum number of hashes that follow a double quote in the string.
+    // We need to use one more than that to delimit the string.
+    let leading_hashes = |s: &str| s.chars().take_while(|&c| c == '#').count();
+    let max_hashes = patch.split('"').map(leading_hashes).max().unwrap();
+    StrLitKind::Raw(max_hashes + 1)
+}
+
+fn format_patch(desired_indent: Option<usize>, patch: &str) -> String {
+    let lit_kind = lit_kind_for_patch(patch);
     let indent = desired_indent.map(|it| " ".repeat(it));
     let is_multiline = patch.contains('\n');
 
     let mut buf = String::new();
-    buf.push('r');
-    buf.push_str(hashes);
-    buf.push('"');
+    lit_kind.write_start(&mut buf).unwrap();
     if is_multiline {
         buf.push('\n');
     }
@@ -575,8 +610,7 @@ fn format_patch(desired_indent: Option<usize>, patch: &str) -> String {
             buf.push_str(indent);
         }
     }
-    buf.push('"');
-    buf.push_str(hashes);
+    lit_kind.write_end(&mut buf).unwrap();
     buf
 }
 
@@ -678,6 +712,12 @@ mod tests {
             "#"##]]
         .assert_eq(&patch);
 
+        let patch = format_patch(None, r"hello\tworld");
+        expect![[r##"r#"hello\tworld"#"##]].assert_eq(&patch);
+
+        let patch = format_patch(None, "{\"foo\": 42}");
+        expect![[r##"r#"{"foo": 42}"#"##]].assert_eq(&patch);
+
         let patch = format_patch(Some(0), "hello\nworld\n");
         expect![[r##"
             r#"
@@ -687,7 +727,7 @@ mod tests {
         .assert_eq(&patch);
 
         let patch = format_patch(Some(4), "single line");
-        expect![[r##"r#"single line"#"##]].assert_eq(&patch);
+        expect![[r#""single line""#]].assert_eq(&patch);
     }
 
     #[test]
