@@ -649,17 +649,22 @@ fn to_abs_ws_path(path: &Path) -> PathBuf {
     static WORKSPACE_ROOT: OnceCell<PathBuf> = OnceCell::new();
     WORKSPACE_ROOT
         .get_or_try_init(|| {
-            let my_manifest = env::var("CARGO_MANIFEST_DIR")?;
+            let manifest_dir = env::var("CARGO_MANIFEST_DIR")?;
 
             // Heuristic, see https://github.com/rust-lang/cargo/issues/3946
-            let workspace_root = Path::new(&my_manifest)
-                .ancestors()
-                .filter(|it| it.join("Cargo.toml").exists())
-                .last()
-                .unwrap()
-                .to_path_buf();
+            let workspace_root = Path::new(&manifest_dir).ancestors().find(|it| {
+                match fs::read_to_string(it.join("Cargo.toml")) {
+                    Ok(cargo_toml) => cargo_toml.lines().any(|line| line.trim() == "[workspace]"),
+                    Err(_) => false, // no Cargo.toml
+                }
+            });
 
-            Ok(workspace_root)
+            // Check if we found a workspace or if we should use
+            // manifest_dir.
+            match workspace_root {
+                Some(workspace_root) => Ok(workspace_root.to_path_buf()),
+                None => Ok(PathBuf::from(manifest_dir)),
+            }
         })
         .unwrap_or_else(|_: env::VarError| {
             panic!("No CARGO_MANIFEST_DIR env var and the path is relative: {}", path.display())
