@@ -204,6 +204,25 @@ macro_rules! expect_file {
     }};
 }
 
+/// Creates an instance of `ExpectFile` from relative or absolute path:
+///
+/// ```
+/// # use expect_test::expect_file;
+/// expect_file("./test_data/bar.html");
+/// ```
+///
+/// This uses the `#[track_caller]` attribute to resolve relative file paths.
+/// They [won't work correctly][1] if this is called from a function which also uses `#[track_caller]`,
+/// or if the toolchain is [configured to strip caller information][2].
+/// In these cases you must use the macro form, [`expect_file!`].
+///
+/// [1]: https://github.com/rust-analyzer/expect-test/issues/15#issuecomment-939308821
+/// [2]: https://doc.rust-lang.org/beta/unstable-book/compiler-flags/location-detail.html
+#[track_caller]
+pub fn expect_file(path: impl Into<std::path::PathBuf>) -> ExpectFile {
+    ExpectFile { path: path.into(), position: std::panic::Location::caller().file() }
+}
+
 /// Self-updating string literal.
 #[derive(Debug)]
 pub struct Expect {
@@ -793,6 +812,11 @@ mod tests {
     #[test]
     fn test_expect_file() {
         expect_file!["./lib.rs"].assert_eq(include_str!("./lib.rs"))
+    }
+
+    #[test]
+    fn test_expect_file_fn() {
+        expect_file("./lib.rs").assert_eq(include_str!("./lib.rs"))
     }
 
     #[test]
