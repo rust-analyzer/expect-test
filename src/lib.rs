@@ -135,7 +135,7 @@
 //!
 //! ## Minimal Supported Rust Version
 //!
-//! This crate's minimum supported `rustc` version is `1.45.0`. MSRV is updated
+//! This crate's minimum supported `rustc` version is `1.46.0`. MSRV is updated
 //! conservatively, supporting roughly 10 minor versions of `rustc`. MSRV bump
 //! is not considered semver breaking, but will require at least minor version
 //! bump.
@@ -610,11 +610,7 @@ fn lit_kind_for_patch(patch: &str) -> StrLitKind {
     let has_dquote = patch.chars().any(|c| c == '"');
     if !has_dquote {
         let has_bslash_or_newline = patch.chars().any(|c| matches!(c, '\\' | '\n'));
-        return if has_bslash_or_newline {
-            StrLitKind::Raw(1)
-        } else {
-            StrLitKind::Normal
-        };
+        return if has_bslash_or_newline { StrLitKind::Raw(1) } else { StrLitKind::Normal };
     }
 
     // Find the maximum number of hashes that follow a double quote in the string.
