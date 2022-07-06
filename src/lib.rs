@@ -396,7 +396,6 @@ impl Expect {
                     .char_indices()
                     .skip((self.position.column - 1).try_into().unwrap())
                     .skip_while(|&(_, c)| !matches!(c, '[' | '(' | '{'))
-                    // .skip_while(|&(_, c)| matches!(c, '[' | '(' | '{') || c.is_whitespace())
                     .skip(1)
                     .next()
                     .expect("Failed to parse macro invocation")
