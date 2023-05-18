@@ -359,7 +359,7 @@ fn locate_end(arg_start_to_eof: &str) -> Option<usize> {
         // expect![[]]
         '[' => {
             let str_start_to_eof = arg_start_to_eof[1..].trim_start();
-            let str_len = find_str_lit_len(str_start_to_eof)?;
+            let str_len = find_str_lit_len(str_start_to_eof).unwrap_or(0);
             let str_end_to_eof = &str_start_to_eof[str_len..];
             let closing_brace_offset = str_end_to_eof.find(']')?;
             Some((arg_start_to_eof.len() - str_end_to_eof.len()) + closing_brace_offset + 1)
