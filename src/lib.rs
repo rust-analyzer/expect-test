@@ -875,3 +875,8 @@ line1
         ];
     }
 }
+
+#[test]
+fn nope() {
+    panic!("can't merge me")
+}
