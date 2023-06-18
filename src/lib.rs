@@ -878,5 +878,12 @@ line1
 
 #[test]
 fn nope() {
-    panic!("can't merge me")
+    let output = std::process::Command::new("git")
+        .args(&["show", "-s", "HEAD"])
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    if !stdout.contains("lol") {
+        panic!("stdout = {}", stdout)
+    }
 }
