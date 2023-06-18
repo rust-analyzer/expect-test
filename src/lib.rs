@@ -118,7 +118,7 @@
 //! ```
 //!
 //! See
-//! https://blog.janestreet.com/using-ascii-waveforms-to-test-hardware-designs/
+//! <https://blog.janestreet.com/using-ascii-waveforms-to-test-hardware-designs/>
 //! for a cool example of snapshot testing in the wild!
 //!
 //! # Alternatives
@@ -135,7 +135,7 @@
 //!
 //! ## Minimal Supported Rust Version
 //!
-//! This crate's minimum supported `rustc` version is `1.45.0`. MSRV is updated
+//! This crate's minimum supported `rustc` version is `1.60.0`. MSRV is updated
 //! conservatively, supporting roughly 10 minor versions of `rustc`. MSRV bump
 //! is not considered semver breaking, but will require at least minor version
 //! bump.
