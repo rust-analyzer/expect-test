@@ -338,6 +338,7 @@ impl Expect {
             }
             line_start += line.len();
         }
+        // `literal_start` points to the first character after `expect![`
         let (literal_start, line_indent) = target_line.unwrap();
 
         let lit_to_eof = &file[literal_start..];
@@ -352,6 +353,9 @@ impl Expect {
     }
 }
 
+/// Returns the byte index of the closing delimiter.
+///
+/// `arg_start_to_eof` is the part after `expect![`, with leading whitespaces trimmed.
 fn locate_end(arg_start_to_eof: &str) -> Option<usize> {
     match arg_start_to_eof.chars().next()? {
         c if c.is_whitespace() => panic!("skip whitespace before calling `locate_end`"),
@@ -359,7 +363,7 @@ fn locate_end(arg_start_to_eof: &str) -> Option<usize> {
         // expect![[]]
         '[' => {
             let str_start_to_eof = arg_start_to_eof[1..].trim_start();
-            let str_len = find_str_lit_len(str_start_to_eof)?;
+            let str_len = find_str_lit_len(str_start_to_eof).unwrap_or(0);
             let str_end_to_eof = &str_start_to_eof[str_len..];
             let closing_brace_offset = str_end_to_eof.find(']')?;
             Some((arg_start_to_eof.len() - str_end_to_eof.len()) + closing_brace_offset + 1)
@@ -836,8 +840,9 @@ line1
         macro_rules! check_locate {
             ($( [[$s:literal]] ),* $(,)?) => {$({
                 let lit = stringify!($s);
-                let with_trailer = format!("{} \t]]\n", lit);
-                assert_eq!(locate_end(&with_trailer), Some(lit.len()));
+                let with_trailer = format!("[{} \t]]\n", lit);
+                //                          ^  ^^ ^^  5 additional chars
+                assert_eq!(locate_end(&with_trailer), Some(4+lit.len()));
             })*};
         }
 
@@ -850,7 +855,7 @@ line1
         );
 
         // Check `expect![[  ]]` as well.
-        assert_eq!(locate_end("]]"), Some(0));
+        assert_eq!(locate_end("[]]"), Some(2));
     }
 
     #[test]
