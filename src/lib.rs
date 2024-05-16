@@ -338,6 +338,7 @@ impl Expect {
             }
             line_start += line.len();
         }
+        // `literal_start` points to the first character after `expect![`
         let (literal_start, line_indent) = target_line.unwrap();
 
         let lit_to_eof = &file[literal_start..];
@@ -345,31 +346,42 @@ impl Expect {
 
         let literal_start = literal_start + (lit_to_eof.len() - lit_to_eof_trimmed.len());
 
-        let literal_len =
-            locate_end(lit_to_eof_trimmed).expect("Couldn't find closing delimiter for `expect!`.");
+        let literal_len = locate_end(lit_to_eof_trimmed);
         let literal_range = literal_start..literal_start + literal_len;
         Location { line_indent, literal_range }
     }
 }
 
-fn locate_end(arg_start_to_eof: &str) -> Option<usize> {
-    match arg_start_to_eof.chars().next()? {
+/// Returns the byte index of the closing delimiter.
+///
+/// `arg_start_to_eof` is the part after `expect![` until the closing delimiter
+/// with leading whitespaces trimmed.
+/// Note that we can actually assume the syntax is valid according to `macro_rules`.
+fn locate_end(arg_start_to_eof: &str) -> usize {
+    let mut chars = arg_start_to_eof.chars();
+    match chars.next().expect("after `expect![` there should be a char") {
         c if c.is_whitespace() => panic!("skip whitespace before calling `locate_end`"),
 
         // expect![[]]
         '[' => {
             let str_start_to_eof = arg_start_to_eof[1..].trim_start();
-            let str_len = find_str_lit_len(str_start_to_eof)?;
+            let str_len = if ']' == chars.next().expect("after `expect![[` there should be a char")
+            {
+                0
+            } else {
+                find_str_lit_len(str_start_to_eof).expect("invalid string literal in `expect![[`")
+            };
             let str_end_to_eof = &str_start_to_eof[str_len..];
-            let closing_brace_offset = str_end_to_eof.find(']')?;
-            Some((arg_start_to_eof.len() - str_end_to_eof.len()) + closing_brace_offset + 1)
+            let closing_brace_offset =
+                str_end_to_eof.find(']').expect("closing `]` not found after `expect![[`");
+            (arg_start_to_eof.len() - str_end_to_eof.len()) + closing_brace_offset + 1
         }
 
         // expect![] | expect!{} | expect!()
-        ']' | '}' | ')' => Some(0),
+        ']' | '}' | ')' => 0,
 
         // expect!["..."] | expect![r#"..."#]
-        _ => find_str_lit_len(arg_start_to_eof),
+        _ => find_str_lit_len(arg_start_to_eof).expect("invalid string literal after `expect![`"),
     }
 }
 
@@ -837,8 +849,9 @@ line1
         macro_rules! check_locate {
             ($( [[$s:literal]] ),* $(,)?) => {$({
                 let lit = stringify!($s);
-                let with_trailer = format!("{} \t]]\n", lit);
-                assert_eq!(locate_end(&with_trailer), Some(lit.len()));
+                let with_trailer = format!("[{} \t]]\n", lit);
+                //                          ^  ^^ ^^  5 additional chars
+                assert_eq!(locate_end(&with_trailer), 4+lit.len());
             })*};
         }
 
@@ -850,8 +863,15 @@ line1
             [[r#""]]"#]],
         );
 
-        // Check `expect![[  ]]` as well.
-        assert_eq!(locate_end("]]"), Some(0));
+        // Check `expect![[  ]]`
+        assert_eq!(locate_end("[]]"), 2);
+        // Check `expect![  ]`
+        assert_eq!(locate_end("]"), 0);
+
+        // `locate_end` returns after the closing delimiter.
+        assert_eq!(locate_end("]abc"), 0);
+        // This is actually invalid syntax.
+        assert_eq!(locate_end("]]abc"), 0);
     }
 
     #[test]
