@@ -855,11 +855,10 @@ line1
             [[r#""]]"#]],
         );
 
-        // Check `expect![[  ]]` as well.
+        // Check `expect![[  ]]`
         assert_eq!(locate_end("[]]"), Some(2));
-        // For `expect![]]`, this will be invalid syntax: Syntax Error: expected SEMICOLON
-        // In `locate_end`, we just find the first `]` is the end position and ignores the rest.
-        assert_eq!(locate_end("]]"), Some(0));
+        // Check `expect![  ]`
+        assert_eq!(locate_end("]"), Some(0));
     }
 
     #[test]
