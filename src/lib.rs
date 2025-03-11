@@ -224,6 +224,16 @@ pub struct ExpectFile {
     pub position: &'static str,
 }
 
+/// Shared trait for [`Expect`] and [`ExpectFile`].
+pub trait Expectation {
+    /// Checks if this expect is equal to actual.
+    fn assert_eq(&self, actual: &str);
+    /// Checks if this expect is equal to format!("{:#?}", actual).
+    fn assert_debug_eq(&self, actual: &impl Debug);
+    /// Returns the content of this expect.
+    fn data(&self) -> String;
+}
+
 /// Position of original `expect!` in the source file.
 #[derive(Debug)]
 pub struct Position {
@@ -352,6 +362,18 @@ impl Expect {
     }
 }
 
+impl Expectation for Expect {
+    fn assert_eq(&self, actual: &str) {
+        self.assert_eq(actual);
+    }
+    fn assert_debug_eq(&self, actual: &impl Debug) {
+        self.assert_debug_eq(actual);
+    }
+    fn data(&self) -> String {
+        self.data().into()
+    }
+}
+
 fn locate_end(arg_start_to_eof: &str) -> Option<usize> {
     match arg_start_to_eof.chars().next()? {
         c if c.is_whitespace() => panic!("skip whitespace before calling `locate_end`"),
@@ -459,6 +481,18 @@ impl ExpectFile {
             let dir = Path::new(self.position).parent().unwrap();
             to_abs_ws_path(&dir.join(&self.path))
         }
+    }
+}
+
+impl Expectation for ExpectFile {
+    fn assert_eq(&self, actual: &str) {
+        self.assert_eq(actual);
+    }
+    fn assert_debug_eq(&self, actual: &impl Debug) {
+        self.assert_debug_eq(actual);
+    }
+    fn data(&self) -> String {
+        self.data()
     }
 }
 
