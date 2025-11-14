@@ -146,10 +146,10 @@ use std::{
     ops::Range,
     panic,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{LazyLock, Mutex},
 };
 
-use once_cell::sync::{Lazy, OnceCell};
+use once_cell::sync::OnceCell;
 
 const HELP: &str = "
 You can update all `expect!` tests by running:
@@ -467,7 +467,7 @@ struct Runtime {
     help_printed: bool,
     per_file: HashMap<&'static str, FileRuntime>,
 }
-static RT: Lazy<Mutex<Runtime>> = Lazy::new(Default::default);
+static RT: LazyLock<Mutex<Runtime>> = LazyLock::new(Default::default);
 
 impl Runtime {
     fn fail_expect(expect: &Expect, expected: &str, actual: &str) {
@@ -694,7 +694,7 @@ fn trim_indent(mut text: &str) -> String {
         .collect()
 }
 
-fn lines_with_ends(text: &str) -> LinesWithEnds {
+fn lines_with_ends(text: &str) -> LinesWithEnds<'_> {
     LinesWithEnds { text }
 }
 

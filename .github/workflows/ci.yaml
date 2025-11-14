@@ -16,12 +16,35 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: stable
+          profile: minimal
+    - name: Test Rust Stable
+      run: cargo test
+      env:
+        RUST_TOOLCHAIN: stable
 
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+          toolchain: 1.60
+          profile: minimal
+    - name: Build Rust MSRV (1.60)
+      run: cargo build
+
+  publish:
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0 # fetch tags for publish
-
-    - run: cargo run -p xtask -- ci
+    - name: Publish
+      run: cargo run -p xtask -- ci
       env:
         CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
