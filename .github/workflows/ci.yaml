@@ -21,7 +21,3 @@ jobs:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0 # fetch tags for publish
-
-    - run: cargo run -p xtask -- ci
-      env:
-        CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
