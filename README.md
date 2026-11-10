@@ -1,6 +1,8 @@
 # expect-test
 [![Docs](https://docs.rs/expect-test/badge.svg)](https://docs.rs/expect-test)
 
+<h2>This crate has been vendored into the <a href="https://github.com/rust-lang/rust-analyzer/tree/master/lib/expect-test">rust-analyzer repo</a></h2>
+
 Minimalistic snapshot testing for Rust.
 
 Updating a failing test:
